@@ -323,9 +323,10 @@ const PEPTIDES = [
     activeWeeksMin:8, activeWeeksMax:12, pauseDays:28, configurableWeeks:true
   },
   {
-    id:"klow", name:"Klow", dose:"2 mg · 5 u", vial:"vial 80 mg", color:"var(--klow)",
+    id:"klow", name:"Klow", dose:"2.66 mg · 10 u", vial:"vial 80 mg", color:"var(--klow)",
     doseDays:[0,1,2,3,4,5,6], // diario
-    activeDays:40, pauseDays:28
+    activeDaysMin:30, activeDaysMax:40, pauseDays:28, configurableDays:true,
+    nameOptions:["Klow","GHK-Cu"]
   }
 ];
 
@@ -399,6 +400,10 @@ function cycleStatus(p, today){
     const weeks = (s.weeks && s.weeks>=p.activeWeeksMin && s.weeks<=p.activeWeeksMax) ? s.weeks : 10;
     activeLen = weeks*7;
     pauseLen = p.pauseDays;
+  } else if(p.configurableDays){
+    const days = (s.days && s.days>=p.activeDaysMin && s.days<=p.activeDaysMax) ? s.days : p.activeDaysMin;
+    activeLen = days;
+    pauseLen = p.pauseDays;
   } else {
     activeLen = p.activeDays;
     pauseLen = p.pauseDays;
@@ -415,6 +420,11 @@ function cycleStatus(p, today){
   const phaseStartOffset = active ? (elapsed - cycleDay) : (elapsed - cycleDay) + activeLen;
   const trueEnd = addDays(start, phaseStartOffset + phaseLen - 1);
   return {known:true, active, dayInPhase, phaseLen, daysLeftInPhase, phaseEndDate: trueEnd, cycleLen, activeLen, pauseLen};
+}
+
+function getDisplayName(p){
+  const s = settings[p.id];
+  return (s && s.displayName) ? s.displayName : p.name;
 }
 
 // ---- rendering ----
@@ -446,7 +456,7 @@ async function renderGrid(){
 
     const nameTd = document.createElement('td');
     nameTd.className='name-cell';
-    nameTd.innerHTML = '<span class="swatch" style="background:'+p.color+'"></span><span class="pname">'+p.name+'</span>'
+    nameTd.innerHTML = '<span class="swatch" style="background:'+p.color+'"></span><span class="pname">'+getDisplayName(p)+'</span>'
       + '<div class="pdose">'+p.dose+' · '+p.vial+'</div>'
       + (isPausedThisWeek ? '<div class="paused-tag">En pausa</div>' : '');
     tr.appendChild(nameTd);
@@ -496,7 +506,7 @@ function renderCycleCards(){
     card.className='cycle-card';
 
     if(p.continuous){
-      card.innerHTML = '<div class="cycle-head"><span class="pname">'+p.name+'</span></div>'
+      card.innerHTML = '<div class="cycle-head"><span class="pname">'+getDisplayName(p)+'</span></div>'
         + '<div class="continuous-note">Uso continuo, sin cut-off. Aplica cada sábado por la noche indefinidamente.</div>';
       grid.appendChild(card);
       return;
@@ -505,7 +515,7 @@ function renderCycleCards(){
     const s = settings[p.id] || {};
     const status = cycleStatus(p, today);
 
-    let head = '<div class="cycle-head"><span class="pname">'+p.name+'</span></div>';
+    let head = '<div class="cycle-head"><span class="pname">'+getDisplayName(p)+'</span></div>';
     let body = '';
 
     if(status.known && !status.notStarted){
@@ -540,6 +550,20 @@ function renderCycleCards(){
       }
       controls += '<label>Duración: <select data-pid="'+p.id+'" class="weeksInput">'+opts+'</select></label>';
     }
+    if(p.configurableDays){
+      let opts = '';
+      for(let d=p.activeDaysMin; d<=p.activeDaysMax; d++){
+        opts += '<option value="'+d+'" '+((s.days||p.activeDaysMin)===d?'selected':'')+'>'+d+' días</option>';
+      }
+      controls += '<label>Duración: <select data-pid="'+p.id+'" class="daysInput">'+opts+'</select></label>';
+    }
+    if(p.nameOptions){
+      let opts = '';
+      p.nameOptions.forEach(n=>{
+        opts += '<option value="'+n+'" '+(getDisplayName(p)===n?'selected':'')+'>'+n+'</option>';
+      });
+      controls += '<label>Nombre: <select data-pid="'+p.id+'" class="nameInput">'+opts+'</select></label>';
+    }
     controls += '</div>';
 
     card.innerHTML = head + body + controls;
@@ -570,6 +594,26 @@ function renderCycleCards(){
       const pid = e.target.dataset.pid;
       settings[pid] = settings[pid] || {};
       settings[pid].weeks = parseInt(e.target.value,10);
+      await saveSettings();
+      renderCycleCards();
+      renderGrid();
+    });
+  });
+  document.querySelectorAll('.daysInput').forEach(sel=>{
+    sel.addEventListener('change', async (e)=>{
+      const pid = e.target.dataset.pid;
+      settings[pid] = settings[pid] || {};
+      settings[pid].days = parseInt(e.target.value,10);
+      await saveSettings();
+      renderCycleCards();
+      renderGrid();
+    });
+  });
+  document.querySelectorAll('.nameInput').forEach(sel=>{
+    sel.addEventListener('change', async (e)=>{
+      const pid = e.target.dataset.pid;
+      settings[pid] = settings[pid] || {};
+      settings[pid].displayName = e.target.value;
       await saveSettings();
       renderCycleCards();
       renderGrid();
