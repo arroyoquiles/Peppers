@@ -321,6 +321,43 @@
   .field-input input[type="number"]{width:56px;}
   .field-input input[type="date"]{width:126px;text-align:left;}
   .field-input select{max-width:140px;}
+  .dose-preview{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-top:8px;
+    padding:8px 11px;
+    border-radius:10px;
+    border:1px solid;
+  }
+  .dose-preview-label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+  }
+  .dose-preview-value{
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:700;
+    font-size:16px;
+  }
+  .dose-preview-u{
+    font-weight:400;
+    color:var(--ink-soft);
+    font-size:13px;
+  }
+  .vial-note{
+    font-size:11.5px;
+    color:var(--ink-soft);
+    margin-top:6px;
+    line-height:1.4;
+  }
+  .vial-estimate-tag{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:9.5px;
+    color:var(--pause);
+  }
   .clearBtn{
     font-family:'IBM Plex Mono',monospace;
     font-size:11.5px;
@@ -537,6 +574,56 @@ function computeDoseMg(p){
   return Math.round(mg*100)/100;
 }
 
+function getActiveLen(p){
+  if(p.continuous) return null;
+  const s = settings[p.id] || {};
+  if(p.configurableWeeks){
+    const weeks = (s.weeks && s.weeks>=p.activeWeeksMin && s.weeks<=p.activeWeeksMax) ? s.weeks : 10;
+    return weeks*7;
+  } else if(p.configurableDays){
+    const days = (s.days && s.days>=p.activeDaysMin && s.days<=p.activeDaysMax) ? s.days : p.activeDaysMin;
+    return days;
+  }
+  return p.activeDays;
+}
+
+function monWeekdayIndex(d){
+  const jsDay = d.getDay(); // 0=Sun..6=Sat
+  return jsDay===0 ? 6 : jsDay-1; // 0=Mon..6=Sun, matches doseDays indexing
+}
+
+function computeVialUsage(p){
+  const activeLen = getActiveLen(p);
+  const doseDays = getDoseDays(p);
+  const s = settings[p.id] || {};
+  const doseMg = computeDoseMg(p);
+  const vialMg = getVialMg(p);
+  let doseCount, exact;
+  if(s.start){
+    const start = new Date(s.start+'T00:00:00');
+    doseCount = 0;
+    for(let i=0;i<activeLen;i++){
+      if(doseDays.includes(monWeekdayIndex(addDays(start,i)))) doseCount++;
+    }
+    exact = true;
+  } else {
+    doseCount = activeLen * (doseDays.length/7);
+    exact = false;
+  }
+  const totalMg = doseCount*doseMg;
+  return { doseCount, totalMg, vialsNeeded: totalMg/vialMg, activeLen, exact };
+}
+
+function computeContinuousUsage(p){
+  const doseMg = computeDoseMg(p);
+  const vialMg = getVialMg(p);
+  const doseDays = getDoseDays(p);
+  const dosesPerVial = vialMg/doseMg;
+  const daysPerVial = dosesPerVial * (7/doseDays.length);
+  const vialsPerMonth = 30.44/daysPerVial;
+  return { dosesPerVial, daysPerVial, vialsPerMonth };
+}
+
 function dayTogglesHtml(p){
   const days = getDoseDays(p);
   let html = '<div class="controls-group"><div class="controls-group-title">Días de dosis</div><div class="day-toggle-row">';
@@ -640,13 +727,25 @@ function renderCycleCards(){
       + '<div class="field-row"><span class="field-label">Vial</span><span class="field-input"><input type="number" step="1" min="1" data-pid="'+p.id+'" class="vialInput" value="'+getVialMg(p)+'"><span class="unit-suffix">mg</span></span></div>'
       + '<div class="field-row"><span class="field-label">Reconstituido con</span><span class="field-input"><input type="number" step="0.5" min="0.5" data-pid="'+p.id+'" class="reconInput" value="'+getReconMl(p)+'"><span class="unit-suffix">ml</span></span></div>'
       + '<div class="field-row"><span class="field-label">Unidades por dosis</span><span class="field-input"><input type="number" step="1" min="1" data-pid="'+p.id+'" class="unitsInput" value="'+getUnits(p)+'"></span></div>'
+      + '<div class="dose-preview" style="background:'+p.color+'14;border-color:'+p.color+'33;">'
+        + '<span class="dose-preview-label">Dosis resultante</span>'
+        + '<span class="dose-preview-value" style="color:'+p.color+'">'+computeDoseMg(p)+' mg <span class="dose-preview-u">· '+getUnits(p)+' u</span></span>'
+      + '</div>'
       + '</div>';
 
     if(p.continuous){
+      const cu = computeContinuousUsage(p);
       card.innerHTML = '<div class="cycle-head"><span class="pname">'+getDisplayName(p)+'</span></div>'
         + '<div class="continuous-note">Uso continuo, sin cut-off. Aplica los días que marques abajo, indefinidamente.</div>'
         + dayTogglesHtml(p)
-        + doseGroup;
+        + doseGroup
+        + '<div class="controls-group"><div class="controls-group-title">Consumo de viales</div>'
+          + '<div class="dose-preview" style="background:'+p.color+'14;border-color:'+p.color+'33;">'
+            + '<span class="dose-preview-label">Un vial te dura</span>'
+            + '<span class="dose-preview-value" style="color:'+p.color+'">≈ '+Math.round(cu.daysPerVial)+' días</span>'
+          + '</div>'
+          + '<div class="vial-note">≈ '+cu.dosesPerVial.toFixed(1)+' dosis por vial · ≈ '+cu.vialsPerMonth.toFixed(2)+' viales al mes</div>'
+        + '</div>';
       grid.appendChild(card);
       return;
     }
@@ -705,7 +804,17 @@ function renderCycleCards(){
       cycleGroup += '<button type="button" class="clearBtn" data-pid="'+p.id+'">Quitar fecha de inicio</button>';
     }
 
-    card.innerHTML = head + body + dayTogglesHtml(p) + doseGroup + cycleGroup;
+    const vu = computeVialUsage(p);
+    const vialGroup = '<div class="controls-group"><div class="controls-group-title">Viales para el ciclo</div>'
+      + '<div class="dose-preview" style="background:'+p.color+'14;border-color:'+p.color+'33;">'
+        + '<span class="dose-preview-label">Necesitas</span>'
+        + '<span class="dose-preview-value" style="color:'+p.color+'">≈ '+vu.vialsNeeded.toFixed(2)+' viales</span>'
+      + '</div>'
+      + '<div class="vial-note">'+vu.doseCount+' dosis · '+vu.totalMg.toFixed(1)+' mg totales en '+vu.activeLen+' días'
+        + (vu.exact ? '' : ' <span class="vial-estimate-tag">(estimado, sin fecha de inicio)</span>')
+      + '</div></div>';
+
+    card.innerHTML = head + body + dayTogglesHtml(p) + doseGroup + vialGroup + cycleGroup;
     grid.appendChild(card);
   });
 
