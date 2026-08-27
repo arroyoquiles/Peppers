@@ -621,7 +621,8 @@ function computeContinuousUsage(p){
   const dosesPerVial = vialMg/doseMg;
   const daysPerVial = dosesPerVial * (7/doseDays.length);
   const vialsPerMonth = 30.44/daysPerVial;
-  return { dosesPerVial, daysPerVial, vialsPerMonth };
+  const weeklyMode = doseDays.length===1; // once a week: doses per vial = weeks per vial, no need for day math
+  return { dosesPerVial, daysPerVial, vialsPerMonth, weeklyMode, weeksPerVial: dosesPerVial };
 }
 
 function dayTogglesHtml(p){
@@ -735,6 +736,12 @@ function renderCycleCards(){
 
     if(p.continuous){
       const cu = computeContinuousUsage(p);
+      const durationText = cu.weeklyMode
+        ? '≈ '+cu.weeksPerVial.toFixed(1)+' semanas'
+        : '≈ '+Math.round(cu.daysPerVial)+' días';
+      const noteText = cu.weeklyMode
+        ? '≈ '+cu.dosesPerVial.toFixed(1)+' dosis por vial (1 dosis por semana)'
+        : '≈ '+cu.dosesPerVial.toFixed(1)+' dosis por vial · ≈ '+cu.vialsPerMonth.toFixed(2)+' viales al mes';
       card.innerHTML = '<div class="cycle-head"><span class="pname">'+getDisplayName(p)+'</span></div>'
         + '<div class="continuous-note">Uso continuo, sin cut-off. Aplica los días que marques abajo, indefinidamente.</div>'
         + dayTogglesHtml(p)
@@ -742,9 +749,9 @@ function renderCycleCards(){
         + '<div class="controls-group"><div class="controls-group-title">Consumo de viales</div>'
           + '<div class="dose-preview" style="background:'+p.color+'14;border-color:'+p.color+'33;">'
             + '<span class="dose-preview-label">Un vial te dura</span>'
-            + '<span class="dose-preview-value" style="color:'+p.color+'">≈ '+Math.round(cu.daysPerVial)+' días</span>'
+            + '<span class="dose-preview-value" style="color:'+p.color+'">'+durationText+'</span>'
           + '</div>'
-          + '<div class="vial-note">≈ '+cu.dosesPerVial.toFixed(1)+' dosis por vial · ≈ '+cu.vialsPerMonth.toFixed(2)+' viales al mes</div>'
+          + '<div class="vial-note">'+noteText+'</div>'
         + '</div>';
       grid.appendChild(card);
       return;
