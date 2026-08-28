@@ -108,7 +108,7 @@
 
   @media (max-width:480px){
     col.name-col{width:112px;}
-    td.name-cell{padding:10px 4px 10px 8px !important;width:112px;}
+    td.name-cell{padding:10px 26px 10px 8px !important;width:112px;}
     .pname{font-size:12px;line-height:1.25;}
     .dose-badge{padding:3px 7px;gap:0;margin-top:4px;flex-direction:column;align-items:flex-start;}
     .dose-field{flex-direction:row;align-items:baseline;gap:4px;}
@@ -122,10 +122,12 @@
     .box{width:26px;height:26px;border-radius:6px;font-size:12px;}
     .dash{font-size:10px;}
     .paused-tag{font-size:8px;padding:1px 5px;}
+    .gear-btn{width:20px;height:20px;top:6px;right:3px;}
+    .gear-btn svg{width:11px;height:11px;}
   }
   @media (max-width:360px){
     col.name-col{width:98px;}
-    td.name-cell{padding:8px 3px 8px 6px !important;width:98px;}
+    td.name-cell{padding:8px 24px 8px 6px !important;width:98px;}
     .box{width:23px;height:23px;}
     thead th{font-size:8px;}
     .dose-mg, .dose-u{font-size:11px;}
@@ -134,7 +136,7 @@
 
   tbody tr{border-bottom:1px solid var(--line);}
   tbody tr:last-child{border-bottom:none;}
-  td.name-cell{padding:14px 16px;width:180px;}
+  td.name-cell{padding:14px 30px 14px 16px;width:180px;position:relative;}
   .pname{font-weight:600;font-size:14px;}
   .dose-badge{
     display:inline-flex;
@@ -178,6 +180,23 @@
     display:inline-block;width:8px;height:8px;border-radius:50%;
     margin-right:7px;position:relative;top:-1px;
   }
+  .gear-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:24px;height:24px;
+    padding:0;
+    border:none;
+    background:none;
+    color:var(--ink-soft);
+    opacity:.5;
+    cursor:pointer;
+    border-radius:6px;
+    position:absolute;
+    top:8px;
+    right:6px;
+  }
+  .gear-btn:active{opacity:1;background:var(--paper-dim);}
 
   .cell{padding:10px 4px;position:relative;}
   .box{
@@ -225,33 +244,6 @@
     margin-top:3px;
   }
 
-  .section-title{
-    font-family:'Fraunces',serif;
-    font-size:19px;
-    font-weight:600;
-    margin:34px 0 14px;
-  }
-
-  .cycle-grid{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:14px;
-  }
-  @media (max-width:600px){.cycle-grid{grid-template-columns:1fr;}}
-
-  .cycle-card{
-    background:#fff;
-    border:1px solid var(--line);
-    border-radius:14px;
-    padding:16px 16px 18px;
-  }
-  .cycle-head{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    margin-bottom:10px;
-  }
-  .cycle-head .pname{font-size:15px;}
   .cycle-body{display:flex;gap:14px;align-items:center;}
   .dial{
     width:64px;height:64px;border-radius:50%;
@@ -382,6 +374,47 @@
     color:var(--ink-soft);
     text-align:center;
   }
+
+  .sheet-backdrop{
+    position:fixed;inset:0;
+    background:rgba(20,24,20,0.45);
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .28s ease;
+    z-index:80;
+  }
+  .sheet-backdrop.open{opacity:1;pointer-events:auto;}
+  .sheet-panel{
+    position:fixed;left:0;right:0;bottom:0;
+    max-height:85vh;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    background:var(--paper);
+    color:var(--ink);
+    border-radius:20px 20px 0 0;
+    transform:translateY(102%);
+    transition:transform .34s cubic-bezier(.22,.68,0,1.01);
+    z-index:81;
+    padding:14px 18px calc(28px + env(safe-area-inset-bottom));
+    box-shadow:0 -10px 30px rgba(0,0,0,0.18);
+  }
+  .sheet-panel.open{transform:translateY(0);}
+  .sheet-handle{
+    width:36px;height:4px;border-radius:3px;
+    background:var(--line);
+    margin:2px auto 14px;
+  }
+  .sheet-top{
+    display:flex;align-items:center;justify-content:space-between;
+    margin-bottom:2px;
+  }
+  .sheet-close{
+    border:none;background:var(--paper-dim);
+    color:var(--ink-soft);
+    width:28px;height:28px;border-radius:50%;
+    font-size:15px;line-height:1;
+    cursor:pointer;
+  }
 </style>
 </head>
 <body>
@@ -416,10 +449,17 @@
     </div>
   </div>
 
-  <div class="section-title">Ciclos y cut-offs</div>
-  <div class="cycle-grid" id="cycleGrid"></div>
-
   <footer>Herramienta de organización personal, no sustituye indicación médica.</footer>
+</div>
+
+<div class="sheet-backdrop" id="sheetBackdrop"></div>
+<div class="sheet-panel" id="sheetPanel">
+  <div class="sheet-handle"></div>
+  <div class="sheet-top">
+    <span class="pname" id="sheetTitle"></span>
+    <button type="button" class="sheet-close" id="sheetClose">✕</button>
+  </div>
+  <div id="sheetContent"></div>
 </div>
 
 <script>
@@ -427,22 +467,22 @@ const DAY_NAMES = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
 
 const PEPTIDES = [
   {
-    id:"reta", name:"Retatrutide", vialMg:20, doseUnits:50, defaultReconMl:2, vial:"vial 20 mg", color:"var(--retatrutide)",
+    id:"reta", name:"Retatrutide", vialMg:20, defaultDoseMg:5, defaultReconMl:2, vial:"vial 20 mg", color:"var(--retatrutide)",
     doseDays:[5], // Saturday index (0=Mon)
     continuous:true
   },
   {
-    id:"motsc", name:"MOTS-c", vialMg:40, doseUnits:25, defaultReconMl:2, vial:"vial 40 mg", color:"var(--motsc)",
+    id:"motsc", name:"MOTS-c", vialMg:40, defaultDoseMg:5, defaultReconMl:2, vial:"vial 40 mg", color:"var(--motsc)",
     doseDays:[0,2,4], // Lun, Mié, Vie
     activeDays:28, pauseDays:28
   },
   {
-    id:"tesa", name:"Tesamorelin", vialMg:20, doseUnits:10, defaultReconMl:2, vial:"vial 20 mg", color:"var(--tesamorelin)",
+    id:"tesa", name:"Tesamorelin", vialMg:20, defaultDoseMg:1, defaultReconMl:2, vial:"vial 20 mg", color:"var(--tesamorelin)",
     doseDays:[0,1,2,3,4], // Lun-Vie
     activeWeeksMin:8, activeWeeksMax:12, pauseDays:28, configurableWeeks:true
   },
   {
-    id:"klow", name:"Klow", vialMg:80, doseUnits:10, defaultReconMl:3, vial:"vial 80 mg", color:"var(--klow)",
+    id:"klow", name:"Klow", vialMg:80, defaultDoseMg:2.67, defaultReconMl:3, vial:"vial 80 mg", color:"var(--klow)",
     doseDays:[0,1,2,3,4,5,6], // diario
     activeDaysMin:30, activeDaysMax:40, pauseDays:28, configurableDays:true,
     nameOptions:["Klow","GHK-Cu"]
@@ -462,7 +502,10 @@ function mondayOf(d){
   return date;
 }
 function addDays(d, n){ const r = new Date(d); r.setDate(r.getDate()+n); return r; }
-function isoDate(d){ return d.toISOString().slice(0,10); }
+function isoDate(d){
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+  return y+'-'+m+'-'+day;
+}
 function fmtShort(d){ return d.toLocaleDateString('es-ES',{day:'numeric',month:'short'}); }
 
 function currentWeekStart(){
@@ -534,8 +577,6 @@ function cycleStatus(p, today){
   const dayInPhase = active ? cycleDay+1 : cycleDay-activeLen+1;
   const phaseLen = active ? activeLen : pauseLen;
   const daysLeftInPhase = phaseLen - dayInPhase + 1;
-  const phaseEndDate = addDays(start, elapsed + daysLeftInPhase - 1 + (elapsed - cycleDay) - (elapsed - cycleDay)); // placeholder, recompute cleanly below
-  // recompute end date cleanly
   const phaseStartOffset = active ? (elapsed - cycleDay) : (elapsed - cycleDay) + activeLen;
   const trueEnd = addDays(start, phaseStartOffset + phaseLen - 1);
   return {known:true, active, dayInPhase, phaseLen, daysLeftInPhase, phaseEndDate: trueEnd, cycleLen, activeLen, pauseLen};
@@ -556,9 +597,9 @@ function getReconMl(p){
   return (s && s.reconMl) ? s.reconMl : p.defaultReconMl;
 }
 
-function getUnits(p){
+function getDoseMgInput(p){
   const s = settings[p.id];
-  return (s && s.units) ? s.units : p.doseUnits;
+  return (s && s.doseMg!=null) ? s.doseMg : p.defaultDoseMg;
 }
 
 function getDoseDays(p){
@@ -567,11 +608,13 @@ function getDoseDays(p){
 }
 
 function computeDoseMg(p){
-  const reconMl = getReconMl(p);
-  const mgPerMl = getVialMg(p) / reconMl;
-  const mg = mgPerMl * (getUnits(p)/100);
-  // trim to 2 decimals, drop trailing zeros
-  return Math.round(mg*100)/100;
+  return Math.round(getDoseMgInput(p)*100)/100;
+}
+
+function computeUnits(p){
+  const mgPerMl = getVialMg(p) / getReconMl(p);
+  const units = (getDoseMgInput(p) / mgPerMl) * 100;
+  return Math.round(units*10)/10;
 }
 
 function getActiveLen(p){
@@ -671,10 +714,11 @@ async function renderGrid(){
     const nameTd = document.createElement('td');
     nameTd.className='name-cell';
     nameTd.innerHTML = '<span class="swatch" style="background:'+p.color+'"></span><span class="pname">'+getDisplayName(p)+'</span>'
+      + '<button type="button" class="gear-btn" data-pid="'+p.id+'" aria-label="Configurar '+getDisplayName(p)+'"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>'
       + '<div class="dose-badge" style="border-color:'+p.color+'33;background:'+p.color+'14;">'
         + '<div class="dose-field"><span class="dose-label">mg</span><span class="dose-mg" style="color:'+p.color+'">'+(isUnconfigured?'--':computeDoseMg(p))+'</span></div>'
         + '<div class="dose-divider" style="background:'+p.color+'33;"></div>'
-        + '<div class="dose-field"><span class="dose-label">unidades</span><span class="dose-u">'+(isUnconfigured?'--':getUnits(p))+'</span></div>'
+        + '<div class="dose-field"><span class="dose-label">unidades</span><span class="dose-u">'+(isUnconfigured?'--':computeUnits(p))+'</span></div>'
       + '</div>'
       + (isPausedThisWeek ? '<div class="paused-tag">En pausa</div>' : '')
       + (isUnconfigured ? '<div class="paused-tag">Sin fecha de inicio</div>' : '');
@@ -715,117 +759,138 @@ async function renderGrid(){
   });
 }
 
-function renderCycleCards(){
-  const grid = document.getElementById('cycleGrid');
-  grid.innerHTML = '';
+function buildPeptideCardHtml(p){
   const today = new Date(); today.setHours(0,0,0,0);
 
-  PEPTIDES.forEach(p=>{
-    const card = document.createElement('div');
-    card.className='cycle-card';
+  const doseGroup = '<div class="controls-group"><div class="controls-group-title">Cálculo de dosis</div>'
+    + '<div class="field-row"><span class="field-label">Vial</span><span class="field-input"><input type="number" step="1" min="1" data-pid="'+p.id+'" class="vialInput" value="'+getVialMg(p)+'"><span class="unit-suffix">mg</span></span></div>'
+    + '<div class="field-row"><span class="field-label">Reconstituido con</span><span class="field-input"><input type="number" step="0.5" min="0.5" data-pid="'+p.id+'" class="reconInput" value="'+getReconMl(p)+'"><span class="unit-suffix">ml</span></span></div>'
+    + '<div class="field-row"><span class="field-label">mg por dosis</span><span class="field-input"><input type="number" step="0.01" min="0.01" data-pid="'+p.id+'" class="mgInput" value="'+getDoseMgInput(p)+'"><span class="unit-suffix">mg</span></span></div>'
+    + '<div class="dose-preview" style="background:'+p.color+'14;border-color:'+p.color+'33;">'
+      + '<span class="dose-preview-label">Debes cargar en la jeringa</span>'
+      + '<span class="dose-preview-value" style="color:'+p.color+'">'+computeUnits(p)+' u <span class="dose-preview-u">· '+computeDoseMg(p)+' mg</span></span>'
+    + '</div>'
+    + '</div>';
 
-    const doseGroup = '<div class="controls-group"><div class="controls-group-title">Cálculo de dosis</div>'
-      + '<div class="field-row"><span class="field-label">Vial</span><span class="field-input"><input type="number" step="1" min="1" data-pid="'+p.id+'" class="vialInput" value="'+getVialMg(p)+'"><span class="unit-suffix">mg</span></span></div>'
-      + '<div class="field-row"><span class="field-label">Reconstituido con</span><span class="field-input"><input type="number" step="0.5" min="0.5" data-pid="'+p.id+'" class="reconInput" value="'+getReconMl(p)+'"><span class="unit-suffix">ml</span></span></div>'
-      + '<div class="field-row"><span class="field-label">Unidades por dosis</span><span class="field-input"><input type="number" step="1" min="1" data-pid="'+p.id+'" class="unitsInput" value="'+getUnits(p)+'"></span></div>'
-      + '<div class="dose-preview" style="background:'+p.color+'14;border-color:'+p.color+'33;">'
-        + '<span class="dose-preview-label">Dosis resultante</span>'
-        + '<span class="dose-preview-value" style="color:'+p.color+'">'+computeDoseMg(p)+' mg <span class="dose-preview-u">· '+getUnits(p)+' u</span></span>'
-      + '</div>'
-      + '</div>';
-
-    if(p.continuous){
-      const cu = computeContinuousUsage(p);
-      const durationText = cu.weeklyMode
-        ? '≈ '+cu.weeksPerVial.toFixed(1)+' semanas'
-        : '≈ '+Math.round(cu.daysPerVial)+' días';
-      const noteText = cu.weeklyMode
-        ? '≈ '+cu.dosesPerVial.toFixed(1)+' dosis por vial (1 dosis por semana)'
-        : '≈ '+cu.dosesPerVial.toFixed(1)+' dosis por vial · ≈ '+cu.vialsPerMonth.toFixed(2)+' viales al mes';
-      card.innerHTML = '<div class="cycle-head"><span class="pname">'+getDisplayName(p)+'</span></div>'
-        + '<div class="continuous-note">Uso continuo, sin cut-off. Aplica los días que marques abajo, indefinidamente.</div>'
-        + dayTogglesHtml(p)
-        + doseGroup
-        + '<div class="controls-group"><div class="controls-group-title">Consumo de viales</div>'
-          + '<div class="dose-preview" style="background:'+p.color+'14;border-color:'+p.color+'33;">'
-            + '<span class="dose-preview-label">Un vial te dura</span>'
-            + '<span class="dose-preview-value" style="color:'+p.color+'">'+durationText+'</span>'
-          + '</div>'
-          + '<div class="vial-note">'+noteText+'</div>'
-        + '</div>';
-      grid.appendChild(card);
-      return;
-    }
-
-    const s = settings[p.id] || {};
-    const status = cycleStatus(p, today);
-
-    let head = '<div class="cycle-head"><span class="pname">'+getDisplayName(p)+'</span></div>';
-    let body = '';
-
-    if(status.known && !status.notStarted){
-      const pct = status.active ? (status.dayInPhase/status.activeLen) : (status.dayInPhase/status.pauseLen);
-      const deg = Math.round(pct*360);
-      const dialColor = status.active ? p.color : 'var(--pause)';
-      body += '<div class="cycle-body">'
-        + '<div class="dial" style="background:conic-gradient('+dialColor+' '+deg+'deg, var(--paper-dim) '+deg+'deg)">'
-        + '<div class="dial-inner"><div class="dial-day">'+status.dayInPhase+'</div><div class="dial-of">de '+(status.active?status.activeLen:status.pauseLen)+'</div></div>'
+  if(p.continuous){
+    const cu = computeContinuousUsage(p);
+    const durationText = cu.weeklyMode
+      ? '≈ '+cu.weeksPerVial.toFixed(1)+' semanas'
+      : '≈ '+Math.round(cu.daysPerVial)+' días';
+    const noteText = cu.weeklyMode
+      ? '≈ '+cu.dosesPerVial.toFixed(1)+' dosis por vial (1 dosis por semana)'
+      : '≈ '+cu.dosesPerVial.toFixed(1)+' dosis por vial · ≈ '+cu.vialsPerMonth.toFixed(2)+' viales al mes';
+    return '<div class="continuous-note">Uso continuo, sin cut-off. Aplica los días que marques abajo, indefinidamente.</div>'
+      + dayTogglesHtml(p)
+      + doseGroup
+      + '<div class="controls-group"><div class="controls-group-title">Consumo de viales</div>'
+        + '<div class="dose-preview" style="background:'+p.color+'14;border-color:'+p.color+'33;">'
+          + '<span class="dose-preview-label">Un vial te dura</span>'
+          + '<span class="dose-preview-value" style="color:'+p.color+'">'+durationText+'</span>'
         + '</div>'
-        + '<div class="cycle-info">'
-        + '<span class="status-pill" style="background:'+(status.active?p.color:'var(--pause)')+';color:#fff">'+(status.active?'Activo':'Pausa')+'</span><br>'
-        + (status.active
-            ? 'Quedan <strong>'+status.daysLeftInPhase+' días</strong> de fase activa.<br>Termina el <strong>'+fmtShort(status.phaseEndDate)+'</strong>, luego inicia el cut-off de '+status.pauseLen+' días.'
-            : 'Quedan <strong>'+status.daysLeftInPhase+' días</strong> de cut-off.<br>Reinicia dosis el <strong>'+fmtShort(addDays(status.phaseEndDate,1))+'</strong>.')
-        + '</div></div>';
-    } else if(status.notStarted){
-      body += '<div class="continuous-note">Inicia en '+status.daysUntilStart+' día(s), el '+fmtShort(new Date(s.start+'T00:00:00'))+'.</div>';
-    } else {
-      body += '<div class="continuous-note">Ingresa tu fecha de inicio para calcular el ciclo y el cut-off automáticamente.</div>';
-    }
+        + '<div class="vial-note">'+noteText+'</div>'
+      + '</div>';
+  }
 
-    let cycleGroup = '<div class="controls-group"><div class="controls-group-title">Ciclo</div>'
-      + '<div class="field-row"><span class="field-label">Inicio</span><span class="field-input"><input type="date" data-pid="'+p.id+'" class="startInput" value="'+(s.start||'')+'"></span></div>';
-    if(p.configurableWeeks){
-      let opts = '';
-      for(let w=p.activeWeeksMin; w<=p.activeWeeksMax; w++){
-        opts += '<option value="'+w+'" '+((s.weeks||10)===w?'selected':'')+'>'+w+' semanas</option>';
-      }
-      cycleGroup += '<div class="field-row"><span class="field-label">Duración activa</span><span class="field-input"><select data-pid="'+p.id+'" class="weeksInput">'+opts+'</select></span></div>';
-    }
-    if(p.configurableDays){
-      let opts = '';
-      for(let d=p.activeDaysMin; d<=p.activeDaysMax; d++){
-        opts += '<option value="'+d+'" '+((s.days||p.activeDaysMin)===d?'selected':'')+'>'+d+' días</option>';
-      }
-      cycleGroup += '<div class="field-row"><span class="field-label">Duración activa</span><span class="field-input"><select data-pid="'+p.id+'" class="daysInput">'+opts+'</select></span></div>';
-    }
-    if(p.nameOptions){
-      let opts = '';
-      p.nameOptions.forEach(n=>{
-        opts += '<option value="'+n+'" '+(getDisplayName(p)===n?'selected':'')+'>'+n+'</option>';
-      });
-      cycleGroup += '<div class="field-row"><span class="field-label">Nombre</span><span class="field-input"><select data-pid="'+p.id+'" class="nameInput">'+opts+'</select></span></div>';
-    }
-    cycleGroup += '</div>';
-    if(s.start){
-      cycleGroup += '<button type="button" class="clearBtn" data-pid="'+p.id+'">Quitar fecha de inicio</button>';
-    }
+  const s = settings[p.id] || {};
+  const status = cycleStatus(p, today);
+  let body = '';
 
-    const vu = computeVialUsage(p);
-    const vialGroup = '<div class="controls-group"><div class="controls-group-title">Viales para el ciclo</div>'
-      + '<div class="dose-preview" style="background:'+p.color+'14;border-color:'+p.color+'33;">'
-        + '<span class="dose-preview-label">Necesitas</span>'
-        + '<span class="dose-preview-value" style="color:'+p.color+'">≈ '+vu.vialsNeeded.toFixed(2)+' viales</span>'
+  if(status.known && !status.notStarted){
+    const pct = status.active ? (status.dayInPhase/status.activeLen) : (status.dayInPhase/status.pauseLen);
+    const deg = Math.round(pct*360);
+    const dialColor = status.active ? p.color : 'var(--pause)';
+    body += '<div class="cycle-body">'
+      + '<div class="dial" style="background:conic-gradient('+dialColor+' '+deg+'deg, var(--paper-dim) '+deg+'deg)">'
+      + '<div class="dial-inner"><div class="dial-day">'+status.dayInPhase+'</div><div class="dial-of">de '+(status.active?status.activeLen:status.pauseLen)+'</div></div>'
       + '</div>'
-      + '<div class="vial-note">'+vu.doseCount+' dosis · '+vu.totalMg.toFixed(1)+' mg totales en '+vu.activeLen+' días'
-        + (vu.exact ? '' : ' <span class="vial-estimate-tag">(estimado, sin fecha de inicio)</span>')
+      + '<div class="cycle-info">'
+      + '<span class="status-pill" style="background:'+(status.active?p.color:'var(--pause)')+';color:#fff">'+(status.active?'Activo':'Pausa')+'</span><br>'
+      + (status.active
+          ? 'Quedan <strong>'+status.daysLeftInPhase+' días</strong> de fase activa.<br>Termina el <strong>'+fmtShort(status.phaseEndDate)+'</strong>, luego inicia el cut-off de '+status.pauseLen+' días.'
+          : 'Quedan <strong>'+status.daysLeftInPhase+' días</strong> de cut-off.<br>Reinicia dosis el <strong>'+fmtShort(addDays(status.phaseEndDate,1))+'</strong>.')
       + '</div></div>';
+  } else if(status.notStarted){
+    body += '<div class="continuous-note">Inicia en '+status.daysUntilStart+' día(s), el '+fmtShort(new Date(s.start+'T00:00:00'))+'.</div>';
+  } else {
+    body += '<div class="continuous-note">Ingresa tu fecha de inicio para calcular el ciclo y el cut-off automáticamente.</div>';
+  }
 
-    card.innerHTML = head + body + dayTogglesHtml(p) + doseGroup + vialGroup + cycleGroup;
-    grid.appendChild(card);
-  });
+  let cycleGroup = '<div class="controls-group"><div class="controls-group-title">Ciclo</div>'
+    + '<div class="field-row"><span class="field-label">Inicio</span><span class="field-input"><input type="date" data-pid="'+p.id+'" class="startInput" value="'+(s.start||'')+'"></span></div>';
+  if(p.configurableWeeks){
+    let opts = '';
+    for(let w=p.activeWeeksMin; w<=p.activeWeeksMax; w++){
+      opts += '<option value="'+w+'" '+((s.weeks||10)===w?'selected':'')+'>'+w+' semanas</option>';
+    }
+    cycleGroup += '<div class="field-row"><span class="field-label">Duración activa</span><span class="field-input"><select data-pid="'+p.id+'" class="weeksInput">'+opts+'</select></span></div>';
+  }
+  if(p.configurableDays){
+    let opts = '';
+    for(let d=p.activeDaysMin; d<=p.activeDaysMax; d++){
+      opts += '<option value="'+d+'" '+((s.days||p.activeDaysMin)===d?'selected':'')+'>'+d+' días</option>';
+    }
+    cycleGroup += '<div class="field-row"><span class="field-label">Duración activa</span><span class="field-input"><select data-pid="'+p.id+'" class="daysInput">'+opts+'</select></span></div>';
+  }
+  if(p.nameOptions){
+    let opts = '';
+    p.nameOptions.forEach(n=>{
+      opts += '<option value="'+n+'" '+(getDisplayName(p)===n?'selected':'')+'>'+n+'</option>';
+    });
+    cycleGroup += '<div class="field-row"><span class="field-label">Nombre</span><span class="field-input"><select data-pid="'+p.id+'" class="nameInput">'+opts+'</select></span></div>';
+  }
+  cycleGroup += '</div>';
+  if(s.start){
+    cycleGroup += '<button type="button" class="clearBtn" data-pid="'+p.id+'">Quitar fecha de inicio</button>';
+  }
 
-  document.querySelectorAll('.day-toggle').forEach(btn=>{
+  const vu = computeVialUsage(p);
+  const vialGroup = '<div class="controls-group"><div class="controls-group-title">Viales para el ciclo</div>'
+    + '<div class="dose-preview" style="background:'+p.color+'14;border-color:'+p.color+'33;">'
+      + '<span class="dose-preview-label">Necesitas</span>'
+      + '<span class="dose-preview-value" style="color:'+p.color+'">≈ '+vu.vialsNeeded.toFixed(2)+' viales</span>'
+    + '</div>'
+    + '<div class="vial-note">'+vu.doseCount+' dosis · '+vu.totalMg.toFixed(1)+' mg totales en '+vu.activeLen+' días'
+      + (vu.exact ? '' : ' <span class="vial-estimate-tag">(estimado, sin fecha de inicio)</span>')
+    + '</div></div>';
+
+  return body + dayTogglesHtml(p) + doseGroup + vialGroup + cycleGroup;
+}
+
+// ---- bottom sheet ----
+let openPid = null;
+const sheetBackdrop = document.getElementById('sheetBackdrop');
+const sheetPanel = document.getElementById('sheetPanel');
+const sheetContent = document.getElementById('sheetContent');
+const sheetTitle = document.getElementById('sheetTitle');
+
+function refreshSheet(){
+  if(!openPid) return;
+  const p = PEPTIDES.find(x=>x.id===openPid);
+  if(!p) return;
+  sheetTitle.textContent = getDisplayName(p);
+  sheetContent.innerHTML = buildPeptideCardHtml(p);
+  attachSheetListeners();
+}
+
+function openSheet(pid){
+  openPid = pid;
+  refreshSheet();
+  sheetBackdrop.classList.add('open');
+  sheetPanel.classList.add('open');
+}
+
+function closeSheet(){
+  sheetBackdrop.classList.remove('open');
+  sheetPanel.classList.remove('open');
+  openPid = null;
+}
+
+document.getElementById('sheetClose').addEventListener('click', closeSheet);
+sheetBackdrop.addEventListener('click', closeSheet);
+
+function attachSheetListeners(){
+  sheetContent.querySelectorAll('.day-toggle').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const pid = btn.dataset.pid;
       const day = parseInt(btn.dataset.day,10);
@@ -841,100 +906,105 @@ function renderCycleCards(){
       settings[pid] = settings[pid] || {};
       settings[pid].doseDays = days;
       await saveSettings();
-      renderCycleCards();
+      refreshSheet();
       renderGrid();
     });
   });
-  document.querySelectorAll('.vialInput').forEach(inp=>{
+  sheetContent.querySelectorAll('.vialInput').forEach(inp=>{
     inp.addEventListener('change', async (e)=>{
       const pid = e.target.dataset.pid;
       const val = parseFloat(e.target.value);
       settings[pid] = settings[pid] || {};
       if(val && val>0){ settings[pid].vialMg = val; } else { delete settings[pid].vialMg; }
       await saveSettings();
-      renderCycleCards();
+      refreshSheet();
       renderGrid();
     });
   });
-  document.querySelectorAll('.reconInput').forEach(inp=>{
+  sheetContent.querySelectorAll('.reconInput').forEach(inp=>{
     inp.addEventListener('change', async (e)=>{
       const pid = e.target.dataset.pid;
       const val = parseFloat(e.target.value);
       settings[pid] = settings[pid] || {};
       if(val && val>0){ settings[pid].reconMl = val; } else { delete settings[pid].reconMl; }
       await saveSettings();
-      renderCycleCards();
+      refreshSheet();
       renderGrid();
     });
   });
-  document.querySelectorAll('.unitsInput').forEach(inp=>{
+  sheetContent.querySelectorAll('.mgInput').forEach(inp=>{
     inp.addEventListener('change', async (e)=>{
       const pid = e.target.dataset.pid;
       const val = parseFloat(e.target.value);
       settings[pid] = settings[pid] || {};
-      if(val && val>0){ settings[pid].units = val; } else { delete settings[pid].units; }
+      if(val && val>0){ settings[pid].doseMg = val; } else { delete settings[pid].doseMg; }
       await saveSettings();
-      renderCycleCards();
+      refreshSheet();
       renderGrid();
     });
   });
-  document.querySelectorAll('.startInput').forEach(inp=>{
+  sheetContent.querySelectorAll('.startInput').forEach(inp=>{
     inp.addEventListener('change', async (e)=>{
       const pid = e.target.dataset.pid;
       settings[pid] = settings[pid] || {};
       settings[pid].start = e.target.value;
       await saveSettings();
-      renderCycleCards();
+      refreshSheet();
       renderGrid();
     });
   });
-  document.querySelectorAll('.clearBtn').forEach(btn=>{
+  sheetContent.querySelectorAll('.clearBtn').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const pid = btn.dataset.pid;
       if(settings[pid]) delete settings[pid].start;
       await saveSettings();
-      renderCycleCards();
+      refreshSheet();
       renderGrid();
     });
   });
-  document.querySelectorAll('.weeksInput').forEach(sel=>{
+  sheetContent.querySelectorAll('.weeksInput').forEach(sel=>{
     sel.addEventListener('change', async (e)=>{
       const pid = e.target.dataset.pid;
       settings[pid] = settings[pid] || {};
       settings[pid].weeks = parseInt(e.target.value,10);
       await saveSettings();
-      renderCycleCards();
+      refreshSheet();
       renderGrid();
     });
   });
-  document.querySelectorAll('.daysInput').forEach(sel=>{
+  sheetContent.querySelectorAll('.daysInput').forEach(sel=>{
     sel.addEventListener('change', async (e)=>{
       const pid = e.target.dataset.pid;
       settings[pid] = settings[pid] || {};
       settings[pid].days = parseInt(e.target.value,10);
       await saveSettings();
-      renderCycleCards();
+      refreshSheet();
       renderGrid();
     });
   });
-  document.querySelectorAll('.nameInput').forEach(sel=>{
+  sheetContent.querySelectorAll('.nameInput').forEach(sel=>{
     sel.addEventListener('change', async (e)=>{
       const pid = e.target.dataset.pid;
       settings[pid] = settings[pid] || {};
       settings[pid].displayName = e.target.value;
       await saveSettings();
-      renderCycleCards();
+      refreshSheet();
       renderGrid();
     });
   });
 }
+
+// delegated: gear icon opens the sheet for its peptide (works even after grid re-renders)
+document.getElementById('gridBody').addEventListener('click', (e)=>{
+  const btn = e.target.closest('.gear-btn');
+  if(btn) openSheet(btn.dataset.pid);
+});
 
 document.getElementById('prevWeek').addEventListener('click', ()=>{ weekOffset--; renderGrid(); });
 document.getElementById('nextWeek').addEventListener('click', ()=>{ weekOffset++; renderGrid(); });
 
 (async function init(){
   await loadSettings();
-  renderCycleCards();
   renderGrid();
 })();
 </script>
