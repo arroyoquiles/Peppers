@@ -92,34 +92,45 @@
   col.gear-col{width:34px;}
   thead th{
     font-family:'IBM Plex Mono',monospace;
-    font-size:11px;
-    letter-spacing:.06em;
-    color:var(--ink-soft);
-    padding:14px 4px 8px;
-    border-bottom:1px solid var(--line);
-  }
-  thead th.daynum{
-    display:block;
     font-size:10px;
+    letter-spacing:.04em;
     color:var(--ink-soft);
-    font-weight:400;
-    margin-top:2px;
+    padding:12px 2px 10px;
+    border-bottom:1px solid var(--line);
+    font-weight:500;
   }
+  thead th.day-col-th{}
+  .day-letter{display:block;text-transform:uppercase;}
+  .daynum{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:26px;height:26px;
+    margin:4px auto 0;
+    border-radius:50%;
+    font-family:'Fraunces',serif;
+    font-size:16px;
+    font-weight:600;
+    color:var(--ink);
+  }
+  .daynum.today{
+    background:var(--ink);
+    color:var(--paper);
+  }
+  .today-col{background:var(--paper-dim);}
   thead th:first-child, tbody td.name-cell{text-align:left;padding-left:14px;}
 
   @media (max-width:480px){
-    col.name-col{width:106px;}
-    col.gear-col{width:28px;}
-    td.name-cell{padding:10px 6px 10px 8px !important;width:106px;}
-    .pname{font-size:12px;line-height:1.25;}
-    .dose-badge{padding:3px 7px;gap:0;margin-top:4px;flex-direction:column;align-items:flex-start;}
-    .dose-field{flex-direction:row;align-items:baseline;gap:4px;}
-    .dose-label{font-size:7px;width:30px;}
-    .dose-mg, .dose-u{font-size:12px;}
-    .dose-divider{display:none;}
+    col.name-col{width:128px;}
+    col.gear-col{width:26px;}
+    td.name-cell{padding:10px 6px 10px 8px !important;width:128px;}
+    .pname{font-size:12px;line-height:1.25;max-width:98px;}
+    .dose-badge{padding:5px 8px;margin-top:5px;}
+    .dose-label{font-size:7px;}
+    .dose-mg, .dose-u{font-size:13px;}
     .swatch{width:6px;height:6px;margin-right:5px;}
-    thead th{font-size:9px;padding:12px 1px 6px;}
-    thead th.daynum{font-size:8.5px;}
+    thead th{font-size:8px;padding:10px 1px 8px;}
+    .daynum{width:22px;height:22px;font-size:13px;margin-top:3px;}
     .cell{padding:6px 1px;}
     .box{width:26px;height:26px;border-radius:6px;font-size:12px;}
     .dash{font-size:10px;}
@@ -132,30 +143,33 @@
     col.gear-col{width:24px;}
     td.name-cell{padding:8px 5px 8px 6px !important;width:92px;}
     .box{width:23px;height:23px;}
-    thead th{font-size:8px;}
-    .dose-mg, .dose-u{font-size:11px;}
-    .dose-label{width:28px;}
+    thead th{font-size:7.5px;}
+    .daynum{width:19px;height:19px;font-size:11.5px;}
+    .dose-mg, .dose-u{font-size:11.5px;}
   }
 
   tbody tr{border-bottom:1px solid var(--line);}
   tbody tr:last-child{border-bottom:none;}
   td.name-cell{padding:14px 10px 14px 16px;width:172px;}
-  .pname{font-weight:600;font-size:14px;}
+  .pname{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:inline-block;vertical-align:middle;max-width:150px;}
   .dose-badge{
-    display:inline-flex;
+    display:flex;
     align-items:center;
-    gap:10px;
-    margin-top:5px;
-    padding:5px 11px;
-    border-radius:12px;
+    width:100%;
+    box-sizing:border-box;
+    margin-top:6px;
+    padding:6px 12px;
+    border-radius:9px;
     border:1px solid;
   }
   .dose-field{
     display:flex;
     flex-direction:column;
-    align-items:flex-start;
+    flex:1;
     line-height:1.15;
   }
+  .dose-field.dose-field-mg{align-items:flex-start;}
+  .dose-field.dose-field-units{align-items:flex-end;}
   .dose-label{
     font-family:'IBM Plex Mono',monospace;
     font-size:8px;
@@ -177,7 +191,7 @@
   .dose-divider{
     width:1px;
     align-self:stretch;
-    min-height:20px;
+    margin:0 10px;
   }
   .swatch{
     display:inline-block;width:8px;height:8px;border-radius:50%;
@@ -467,6 +481,7 @@
 
 <script>
 const DAY_NAMES = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
+const DAY_LETTERS = ["L","M","X","J","V","S","D"];
 
 const PEPTIDES = [
   {
@@ -487,7 +502,7 @@ const PEPTIDES = [
   {
     id:"klow", name:"Klow", vialMg:80, defaultDoseMg:2.67, defaultReconMl:3, vial:"vial 80 mg", color:"var(--klow)",
     doseDays:[0,1,2,3,4,5,6], // diario
-    activeDaysMin:30, activeDaysMax:40, pauseDays:28, configurableDays:true,
+    activeDaysMin:25, activeDaysMax:40, defaultDays:30, pauseDays:28, configurableDays:true,
     nameOptions:["Klow","GHK-Cu"]
   }
 ];
@@ -566,7 +581,7 @@ function cycleStatus(p, today){
     activeLen = weeks*7;
     pauseLen = p.pauseDays;
   } else if(p.configurableDays){
-    const days = (s.days && s.days>=p.activeDaysMin && s.days<=p.activeDaysMax) ? s.days : p.activeDaysMin;
+    const days = (s.days && s.days>=p.activeDaysMin && s.days<=p.activeDaysMax) ? s.days : p.defaultDays;
     activeLen = days;
     pauseLen = p.pauseDays;
   } else {
@@ -627,7 +642,7 @@ function getActiveLen(p){
     const weeks = (s.weeks && s.weeks>=p.activeWeeksMin && s.weeks<=p.activeWeeksMax) ? s.weeks : 10;
     return weeks*7;
   } else if(p.configurableDays){
-    const days = (s.days && s.days>=p.activeDaysMin && s.days<=p.activeDaysMax) ? s.days : p.activeDaysMin;
+    const days = (s.days && s.days>=p.activeDaysMin && s.days<=p.activeDaysMax) ? s.days : p.defaultDays;
     return days;
   }
   return p.activeDays;
@@ -684,12 +699,21 @@ function dayTogglesHtml(p){
 }
 
 // ---- rendering ----
+function getTodayColIndex(){
+  if(weekOffset!==0) return -1; // only highlight "today" when viewing the actual current week
+  return monWeekdayIndex(new Date());
+}
+
 function renderHeader(weekStart){
   const end = addDays(weekStart,6);
   document.getElementById('weekRange').textContent = fmtShort(weekStart)+' – '+fmtShort(end)+' · '+weekStart.getFullYear();
+  const todayIdx = getTodayColIndex();
   for(let i=0;i<7;i++){
     const d = addDays(weekStart,i);
-    document.getElementById('th'+i).innerHTML = DAY_NAMES[i] + '<span class="daynum">'+d.getDate()+'</span>';
+    const th = document.getElementById('th'+i);
+    const isToday = i===todayIdx;
+    th.className = 'day-col-th'+(isToday?' today-col':'');
+    th.innerHTML = '<span class="day-letter">'+DAY_LETTERS[i]+'</span><span class="daynum'+(isToday?' today':'')+'">'+d.getDate()+'</span>';
   }
 }
 
@@ -702,6 +726,7 @@ async function renderGrid(){
 
   const tbody = document.getElementById('gridBody');
   tbody.innerHTML = '';
+  const todayIdx = getTodayColIndex();
 
   PEPTIDES.forEach(p=>{
     const status = cycleStatus(p, today);
@@ -718,9 +743,9 @@ async function renderGrid(){
     nameTd.className='name-cell';
     nameTd.innerHTML = '<span class="swatch" style="background:'+p.color+'"></span><span class="pname">'+getDisplayName(p)+'</span>'
       + '<div class="dose-badge" style="border-color:'+p.color+'33;background:'+p.color+'14;">'
-        + '<div class="dose-field"><span class="dose-label">mg</span><span class="dose-mg" style="color:'+p.color+'">'+(isUnconfigured?'--':computeDoseMg(p))+'</span></div>'
+        + '<div class="dose-field dose-field-mg"><span class="dose-label">mg</span><span class="dose-mg" style="color:'+p.color+'">'+(isUnconfigured?'--':computeDoseMg(p))+'</span></div>'
         + '<div class="dose-divider" style="background:'+p.color+'33;"></div>'
-        + '<div class="dose-field"><span class="dose-label">unidades</span><span class="dose-u">'+(isUnconfigured?'--':computeUnits(p))+'</span></div>'
+        + '<div class="dose-field dose-field-units"><span class="dose-label">unidades</span><span class="dose-u">'+(isUnconfigured?'--':computeUnits(p))+'</span></div>'
       + '</div>'
       + (isPausedThisWeek ? '<div class="paused-tag">En pausa</div>' : '')
       + (isUnconfigured ? '<div class="paused-tag">Sin fecha de inicio</div>' : '');
@@ -728,7 +753,7 @@ async function renderGrid(){
 
     for(let i=0;i<7;i++){
       const td = document.createElement('td');
-      td.className='cell';
+      td.className='cell day-col'+(i===todayIdx?' today-col':'');
       if(doseDays.includes(i)){
         const key = p.id+':'+i;
         const box = document.createElement('div');
@@ -836,7 +861,7 @@ function buildPeptideCardHtml(p){
   if(p.configurableDays){
     let opts = '';
     for(let d=p.activeDaysMin; d<=p.activeDaysMax; d++){
-      opts += '<option value="'+d+'" '+((s.days||p.activeDaysMin)===d?'selected':'')+'>'+d+' días</option>';
+      opts += '<option value="'+d+'" '+((s.days||p.defaultDays)===d?'selected':'')+'>'+d+' días</option>';
     }
     cycleGroup += '<div class="field-row"><span class="field-label">Duración activa</span><span class="field-input"><select data-pid="'+p.id+'" class="daysInput">'+opts+'</select></span></div>';
   }
