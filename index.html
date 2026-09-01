@@ -492,17 +492,17 @@ const PEPTIDES = [
   {
     id:"motsc", name:"MOTS-c", vialMg:40, defaultDoseMg:5, defaultReconMl:2, vial:"vial 40 mg", color:"var(--motsc)",
     doseDays:[0,2,4], // Lun, Mié, Vie
-    activeDays:28, pauseDays:28
+    activeWeeksMin:4, activeWeeksMax:8, defaultWeeks:4, pauseDays:28, configurableWeeks:true
   },
   {
     id:"tesa", name:"Tesamorelin", vialMg:20, defaultDoseMg:1, defaultReconMl:2, vial:"vial 20 mg", color:"var(--tesamorelin)",
     doseDays:[0,1,2,3,4], // Lun-Vie
-    activeWeeksMin:8, activeWeeksMax:12, pauseDays:28, configurableWeeks:true
+    activeWeeksMin:8, activeWeeksMax:12, defaultWeeks:10, pauseDays:28, configurableWeeks:true
   },
   {
     id:"klow", name:"Klow", vialMg:80, defaultDoseMg:2.67, defaultReconMl:3, vial:"vial 80 mg", color:"var(--klow)",
     doseDays:[0,1,2,3,4,5,6], // diario
-    activeDaysMin:25, activeDaysMax:40, defaultDays:30, pauseDays:28, configurableDays:true,
+    activeDaysMin:25, activeDaysMax:60, defaultDays:30, pauseDays:28, configurableDays:true,
     nameOptions:["Klow","GHK-Cu"]
   }
 ];
@@ -577,7 +577,7 @@ function cycleStatus(p, today){
 
   let activeLen, pauseLen;
   if(p.configurableWeeks){
-    const weeks = (s.weeks && s.weeks>=p.activeWeeksMin && s.weeks<=p.activeWeeksMax) ? s.weeks : 10;
+    const weeks = (s.weeks && s.weeks>=p.activeWeeksMin && s.weeks<=p.activeWeeksMax) ? s.weeks : p.defaultWeeks;
     activeLen = weeks*7;
     pauseLen = p.pauseDays;
   } else if(p.configurableDays){
@@ -639,7 +639,7 @@ function getActiveLen(p){
   if(p.continuous) return null;
   const s = settings[p.id] || {};
   if(p.configurableWeeks){
-    const weeks = (s.weeks && s.weeks>=p.activeWeeksMin && s.weeks<=p.activeWeeksMax) ? s.weeks : 10;
+    const weeks = (s.weeks && s.weeks>=p.activeWeeksMin && s.weeks<=p.activeWeeksMax) ? s.weeks : p.defaultWeeks;
     return weeks*7;
   } else if(p.configurableDays){
     const days = (s.days && s.days>=p.activeDaysMin && s.days<=p.activeDaysMax) ? s.days : p.defaultDays;
@@ -854,7 +854,7 @@ function buildPeptideCardHtml(p){
   if(p.configurableWeeks){
     let opts = '';
     for(let w=p.activeWeeksMin; w<=p.activeWeeksMax; w++){
-      opts += '<option value="'+w+'" '+((s.weeks||10)===w?'selected':'')+'>'+w+' semanas</option>';
+      opts += '<option value="'+w+'" '+((s.weeks||p.defaultWeeks)===w?'selected':'')+'>'+w+' semanas</option>';
     }
     cycleGroup += '<div class="field-row"><span class="field-label">Duración activa</span><span class="field-input"><select data-pid="'+p.id+'" class="weeksInput">'+opts+'</select></span></div>';
   }
