@@ -547,9 +547,9 @@ const PEPTIDES = [
   {
     id:"klow", name:"Klow", vialMg:80, defaultDoseMg:2.67, defaultReconMl:3, vial:"vial 80 mg", color:"var(--klow)",
     doseDays:[0,1,2,3,4,5,6], // diario
-    activeWeeksMin:2, activeWeeksMax:4, defaultWeeks:2,
+    activeDaysMin:14, activeDaysMax:60, defaultDays:60,
+    configurableDays:true,
     pauseWeeksMin:2, pauseWeeksMax:4, defaultPauseWeeks:2,
-    configurableWeeks:true,
     nameOptions:["Klow","GHK-Cu"]
   }
 ];
@@ -622,8 +622,13 @@ function cycleStatus(p, today){
   const start = new Date(s.start+'T00:00:00');
   if(today < start) return {known:true, active:false, notStarted:true, daysUntilStart: Math.ceil((start-today)/86400000)};
 
-  const weeks = (s.weeks && s.weeks>=p.activeWeeksMin && s.weeks<=p.activeWeeksMax) ? s.weeks : p.defaultWeeks;
-  const activeLen = weeks*7;
+  let activeLen;
+  if(p.configurableDays){
+    activeLen = (s.days && s.days>=p.activeDaysMin && s.days<=p.activeDaysMax) ? s.days : p.defaultDays;
+  } else {
+    const weeks = (s.weeks && s.weeks>=p.activeWeeksMin && s.weeks<=p.activeWeeksMax) ? s.weeks : p.defaultWeeks;
+    activeLen = weeks*7;
+  }
   const pauseWeeks = (s.pauseWeeks && s.pauseWeeks>=p.pauseWeeksMin && s.pauseWeeks<=p.pauseWeeksMax) ? s.pauseWeeks : p.defaultPauseWeeks;
   const pauseLen = pauseWeeks*7;
   const cycleLen = activeLen + pauseLen;
@@ -676,6 +681,9 @@ function computeUnits(p){
 function getActiveLen(p){
   if(p.continuous) return null;
   const s = settings[p.id] || {};
+  if(p.configurableDays){
+    return (s.days && s.days>=p.activeDaysMin && s.days<=p.activeDaysMax) ? s.days : p.defaultDays;
+  }
   const weeks = (s.weeks && s.weeks>=p.activeWeeksMin && s.weeks<=p.activeWeeksMax) ? s.weeks : p.defaultWeeks;
   return weeks*7;
 }
@@ -889,7 +897,13 @@ function buildPeptideCardHtml(p){
 
   let cycleGroup = '<div class="controls-group"><div class="controls-group-title">Ciclo</div>'
     + '<div class="field-row"><span class="field-label">Inicio</span><span class="field-input"><input type="date" data-pid="'+p.id+'" class="startInput" value="'+(s.start||'')+'"></span></div>';
-  {
+  if(p.configurableDays){
+    let opts = '';
+    for(let d=p.activeDaysMin; d<=p.activeDaysMax; d++){
+      opts += '<option value="'+d+'" '+((s.days||p.defaultDays)===d?'selected':'')+'>'+d+' días</option>';
+    }
+    cycleGroup += '<div class="field-row"><span class="field-label">Duración activa</span><span class="field-input"><select data-pid="'+p.id+'" class="daysInput">'+opts+'</select></span></div>';
+  } else {
     let opts = '';
     for(let w=p.activeWeeksMin; w<=p.activeWeeksMax; w++){
       opts += '<option value="'+w+'" '+((s.weeks||p.defaultWeeks)===w?'selected':'')+'>'+w+' semanas</option>';
@@ -929,7 +943,7 @@ function buildPeptideCardHtml(p){
 }
 
 // ---- standalone calculator (scratch pad, never touches peptide settings) ----
-let calcState = { target:'mg', vial:20, water:2, units:50, mg:5 };
+let calcState = { vial:20, water:2, mg:5, timesPerWeek:7 };
 
 async function loadCalcState(){
   const raw = lsGet('calc-scratch');
@@ -942,67 +956,62 @@ function saveCalcState(){
 }
 
 function recalcCalc(){
-  const { target, vial, water, units, mg } = calcState;
-  if(target==='mg'){
-    if(water>0) calcState.mg = Math.round((vial/water)*(units/100)*100)/100;
-  } else if(target==='units'){
-    if(vial>0) calcState.units = Math.round((mg*water*100/vial)*10)/10;
-  } else if(target==='vial'){
-    if(units>0) calcState.vial = Math.round((mg*water*100/units)*100)/100;
-  } else if(target==='water'){
-    if(mg>0) calcState.water = Math.round((vial*units/(100*mg))*100)/100;
-  }
+  const { vial, water, mg, timesPerWeek } = calcState;
+  calcState.units = (vial>0 && water>0) ? Math.round((mg*water*100/vial)*10)/10 : 0;
+  const totalDoses = mg>0 ? Math.floor(vial/mg) : 0;
+  calcState.totalDoses = totalDoses;
+  const days = timesPerWeek>0 ? Math.round(totalDoses*(7/timesPerWeek)) : 0;
+  calcState.days = days;
+  calcState.weeks = Math.round((days/7)*10)/10;
 }
 
-function calcFieldRow(field, label, suffix){
-  const isTarget = calcState.target===field;
+function calcInputRow(field, label, suffix){
   const val = calcState[field];
-  if(isTarget){
-    return '<div class="field-row"><span class="field-label">'+label+'</span><span class="calc-result">'+val+(suffix?' '+suffix:'')+'</span></div>';
-  }
   return '<div class="field-row"><span class="field-label">'+label+'</span><span class="field-input"><input type="number" step="0.01" min="0" class="calcInput" data-field="'+field+'" value="'+val+'">'+(suffix?'<span class="unit-suffix">'+suffix+'</span>':'')+'</span></div>';
 }
 
 function buildCalcHtml(){
   recalcCalc();
-  return '<div class="continuous-note">Pizarra de cálculo suelta — no toca ni guarda nada de tus péptidos. Elige qué quieres que te calcule, y llena los otros tres valores.</div>'
-    + '<div class="controls-group"><div class="controls-group-title">¿Qué quieres calcular?</div>'
-      + '<div class="calc-target-row">'
-        + '<button type="button" class="calc-target-btn'+(calcState.target==='vial'?' active':'')+'" data-field="vial">Vial (mg)</button>'
-        + '<button type="button" class="calc-target-btn'+(calcState.target==='water'?' active':'')+'" data-field="water">Agua (ml)</button>'
-        + '<button type="button" class="calc-target-btn'+(calcState.target==='units'?' active':'')+'" data-field="units">Unidades</button>'
-        + '<button type="button" class="calc-target-btn'+(calcState.target==='mg'?' active':'')+'" data-field="mg">mg por dosis</button>'
-      + '</div></div>'
-    + '<div class="controls-group"><div class="controls-group-title">Valores</div>'
-      + calcFieldRow('vial','Vial','mg')
-      + calcFieldRow('water','Agua (reconstituido con)','ml')
-      + calcFieldRow('units','Unidades','')
-      + calcFieldRow('mg','mg por dosis','mg')
+  let freqOpts = '';
+  for(let i=1;i<=7;i++){
+    freqOpts += '<option value="'+i+'" '+(calcState.timesPerWeek===i?'selected':'')+'>'+i+(i===1?' vez':' veces')+' por semana</option>';
+  }
+  return '<div class="continuous-note">Pizarra de cálculo suelta — no toca ni guarda nada de tus péptidos.</div>'
+    + '<div class="controls-group"><div class="controls-group-title">Tus datos</div>'
+      + calcInputRow('vial','Vial','mg')
+      + calcInputRow('water','Reconstituido con','ml')
+      + calcInputRow('mg','mg que quiero por dosis','mg')
+      + '<div class="field-row"><span class="field-label">Frecuencia</span><span class="field-input"><select class="calcFreqInput">'+freqOpts+'</select></span></div>'
       + '</div>'
-    + '<div class="calc-note">Fórmula: mg por dosis = (vial ÷ agua) × (unidades ÷ 100). Cambia cualquier valor y el resaltado en azul se recalcula solo.</div>';
+    + '<div class="dose-preview" style="background:var(--calc)14;border-color:var(--calc)33;">'
+      + '<span class="dose-preview-label">Debes cargar en la jeringa</span>'
+      + '<span class="dose-preview-value" style="color:var(--calc)">'+calcState.units+' u <span class="dose-preview-u">· '+calcState.mg+' mg</span></span>'
+    + '</div>'
+    + '<div class="dose-preview" style="background:var(--calc)14;border-color:var(--calc)33;margin-top:10px;">'
+      + '<span class="dose-preview-label">Ese vial te dura</span>'
+      + '<span class="dose-preview-value" style="color:var(--calc)">'+calcState.days+' días <span class="dose-preview-u">≈ '+calcState.weeks+' sem.</span></span>'
+    + '</div>'
+    + '<div class="calc-note">'+calcState.totalDoses+' dosis completas por vial, a '+calcState.timesPerWeek+(calcState.timesPerWeek===1?' vez':' veces')+' por semana.</div>';
 }
 
 function attachCalcListeners(){
-  sheetContent.querySelectorAll('.calc-target-btn').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      calcState.target = btn.dataset.field;
-      saveCalcState();
-      refreshSheet();
-    });
-  });
   sheetContent.querySelectorAll('.calcInput').forEach(inp=>{
-    inp.addEventListener('input', ()=>{
+    inp.addEventListener('change', ()=>{
       const field = inp.dataset.field;
       const val = parseFloat(inp.value);
       calcState[field] = isNaN(val) ? 0 : val;
       saveCalcState();
-      recalcCalc();
-      // update just the result display live without losing input focus
-      const resultEl = sheetContent.querySelector('.calc-result');
-      if(resultEl) resultEl.textContent = calcState[calcState.target] + (calcState.target==='vial'||calcState.target==='mg' ? ' mg' : calcState.target==='water' ? ' ml' : '');
+      refreshSheet();
     });
-    inp.addEventListener('change', ()=>{ saveCalcState(); refreshSheet(); });
   });
+  const freqSel = sheetContent.querySelector('.calcFreqInput');
+  if(freqSel){
+    freqSel.addEventListener('change', ()=>{
+      calcState.timesPerWeek = parseInt(freqSel.value,10);
+      saveCalcState();
+      refreshSheet();
+    });
+  }
 }
 
 // ---- bottom sheet ----
