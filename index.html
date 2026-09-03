@@ -1136,6 +1136,16 @@ function attachSheetListeners(){
       renderGrid();
     });
   });
+  sheetContent.querySelectorAll('.daysInput').forEach(sel=>{
+    sel.addEventListener('change', async (e)=>{
+      const pid = e.target.dataset.pid;
+      settings[pid] = settings[pid] || {};
+      settings[pid].days = parseInt(e.target.value,10);
+      await saveSettings();
+      refreshSheet();
+      renderGrid();
+    });
+  });
   sheetContent.querySelectorAll('.pauseWeeksInput').forEach(sel=>{
     sel.addEventListener('change', async (e)=>{
       const pid = e.target.dataset.pid;
